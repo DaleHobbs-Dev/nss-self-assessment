@@ -1,5 +1,7 @@
 """Example Code to demonstrate Python syntax."""
 
+import sqlite3
+
 mydict = {"a": 1, "b": 2, "c": 3}
 
 if "b" in mydict:
@@ -68,15 +70,41 @@ Rationale for using a dictionary of lists to group items by receipt_id:
 
 
 def get_receipt_items(conn, receipt_id):
-    """Fetch items for a specific receipt_id from the database."""
-    cursor = conn.cursor()
-    query = """
-    SELECT p.name AS product_name, p.category, ri.quantity, ri.line_total
-    FROM Receipt r
-    JOIN ReceiptItem ri ON r.id = ri.receipt_id
-    JOIN Product p ON ri.product_id = p.id
-    WHERE r.id = ?
-    ORDER BY ri.line_total DESC;
-    """
-    cursor.execute(query, (receipt_id,))
-    return cursor.fetchall()
+    if not isinstance(receipt_id, int) or receipt_id <= 0:
+        raise ValueError("receipt_id must be a positive integer")
+
+    try:
+        cursor = conn.cursor()
+        query = """
+        SELECT ri.receipt_id, p.name AS product_name, p.category, ri.quantity, ri.line_total
+        FROM ReceiptItem ri
+        JOIN Product p ON ri.product_id = p.id
+        WHERE ri.receipt_id = ?
+        ORDER BY ri.line_total DESC;
+        """
+        cursor.execute(query, (receipt_id,))
+        results = cursor.fetchall()
+
+        if not results:
+            raise LookupError(f"No items found for receipt_id {receipt_id}")
+
+        return results
+
+    except sqlite3.DatabaseError as e:
+        raise RuntimeError(f"Database error occurred: {e}") from e
+
+
+# Connect to your database
+connect = sqlite3.connect("shopping.db")
+
+# call the function
+receipt_items = get_receipt_items(connect, 4)
+
+for item in receipt_items:
+    print(item)
+
+# close the connection
+connect.close()
+
+# Using ValueError forces the caller to handle invalid input, while RuntimeError indicates an unexpected issue with the database operation. This approach ensures that the function is robust and provides clear feedback on what went wrong, allowing for better error handling in the calling code.
+# Other options is returning a status like "None" or an empty list, but this can lead to silent failures if the caller does not check the return value properly. Raising exceptions makes it explicit that something went wrong and encourages proper error handling.
